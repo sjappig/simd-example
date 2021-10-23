@@ -22,34 +22,43 @@ void naive(int n) {
 
 void sse2(int n) {
     // reverse filter (not really needed since it symmetrical)
-    const __m128i filter = _mm_set_epi16(data::filter[4], data::filter[3], data::filter[2], data::filter[1], data::filter[0], 0, 0, 0);
+    const __m128i filter = _mm_set_epi16(0, 0, 0, data::filter[4], data::filter[3], data::filter[2], data::filter[1], data::filter[0]);
+    const __m128i mask = _mm_set_epi16(0, 0, 0, -1, -1, -1, -1, -1);
     for (int round = 0; round < n; ++round) {
         for (auto t = 0; t < data::yLen; ++t) {
-            __m128i x = _mm_set_epi16(data::x[t], data::x[t + 1], data::x[t + 2], data::x[t + 3], data::x[t + 4], 0, 0, 0);
+            //__m128i x = _mm_set_epi16(data::x[t], data::x[t + 1], data::x[t + 2], data::x[t + 3], data::x[t + 4], 0, 0, 0);
+            __m128i x =_mm_loadu_si128((__m128i*)&data::x[t]);
+            x = _mm_and_si128(x, mask);
             __m128i tmp = _mm_madd_epi16(filter, x);
             tmp = _mm_hadd_epi32(tmp, tmp);
             tmp = _mm_hadd_epi32(tmp, tmp);
-            y[t] = _mm_extract_epi32(tmp, 0);
+            y[t] = _mm_extract_epi32(tmp, 3);
         }
     }
 }
 
 void avx2(int n) {
     const __m256i filter = _mm256_set_epi16(
-            data::filter[4], data::filter[3], data::filter[2], data::filter[1], data::filter[0], 0, 0, 0,
-            data::filter[4], data::filter[3], data::filter[2], data::filter[1], data::filter[0], 0, 0, 0
+            0, 0, 0, data::filter[4], data::filter[3], data::filter[2], data::filter[1], data::filter[0],
+            0, 0, 0, data::filter[4], data::filter[3], data::filter[2], data::filter[1], data::filter[0]
+    );
+    const __m256i mask = _mm256_set_epi16(
+            0, 0, 0, -1, -1, -1, -1, -1,
+            0, 0, 0, -1, -1, -1, -1, -1
     );
     for (int round = 0; round < n; ++round) {
         for (auto t = 0; t < data::yLen; t += 2) {
-            __m256i x = _mm256_set_epi16(
+            /*__m256i x = _mm256_set_epi16(
                     data::x[t + 1], data::x[t + 2], data::x[t + 3], data::x[t + 4], data::x[t + 5], 0, 0, 0,
                     data::x[t + 0], data::x[t + 1], data::x[t + 2], data::x[t + 3], data::x[t + 4], 0, 0, 0
-            );
+            );*/
+            __m256i x = _mm256_loadu2_m128i((__m128i*)&data::x[t + 1], (__m128i*)&data::x[t]);
+            x = _mm256_and_si256(x, mask);
             __m256i tmp = _mm256_madd_epi16(filter, x);
             tmp = _mm256_hadd_epi32(tmp, tmp);
             tmp = _mm256_hadd_epi32(tmp, tmp);
-            y[t + 0] = _mm256_extract_epi32(tmp, 0);
-            y[t + 1] = _mm256_extract_epi32(tmp, 4);
+            y[t + 0] = _mm256_extract_epi32(tmp, 3);
+            y[t + 1] = _mm256_extract_epi32(tmp, 7);
         }
     }
 }
