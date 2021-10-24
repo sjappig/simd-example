@@ -7,29 +7,38 @@ namespace data {
 int16_t y[data::yLen + 16]{};
 }
 
-// filter[0] * x[4 + t]
-// filter[1] * x[3 + t]
-// filter[2] * x[2 + t]
-// filter[3] * x[1 + t]
+// filter[0] * x[4 + t] +
+// filter[1] * x[3 + t] +
+// filter[2] * x[2 + t] +
+// filter[3] * x[1 + t] +
+// filter[4] * x[0 + t] = result[t]
 int16_t* naive(const int16_t* x, int16_t* y, size_t yLen, const int16_t* filter) {
     for (auto t = 0; t < yLen; ++t) {
         y[t] = 0;
         for (auto i = 0; i < data::filterLen; ++i) {
-            y[t] += filter[i] * x[4 + t - i];
+            y[t] += filter[i] * x[(data::filterLen - 1) + t - i];
         }
     }
     return y;
 }
 
-int16_t* sse2(const int16_t* x, int16_t* y, size_t yLen, const int16_t* filter) {
-    // reverse filter (not really needed since it symmetrical)
-    //const __m128i filter = _mm_set_epi16(0, 0, 0, data::filter[4], data::filter[3], data::filter[2], data::filter[1], data::filter[0]);
-    const __m128i mFilter =_mm_loadu_si128((__m128i*)filter);
-    //const __m128i mask = _mm_set_epi16(0, 0, 0, -1, -1, -1, -1, -1);
+int16_t* dumbSse2(const int16_t* x, int16_t* y, size_t yLen, const int16_t* filter) {
+    const __m128i mFilter = _mm_set_epi16(0, 0, 0, filter[4], filter[3], filter[2], filter[2], filter[1]);
     for (auto t = 0; t < yLen; ++t) {
-        //__m128i x = _mm_set_epi16(data::x[t], data::x[t + 1], data::x[t + 2], data::x[t + 3], data::x[t + 4], 0, 0, 0);
+        __m128i input = _mm_set_epi16(x[t], x[t + 1], x[t + 2], x[t + 3], x[t + 4], 0, 0, 0);
+        __m128i tmp = _mm_madd_epi16(mFilter, input);
+        tmp = _mm_hadd_epi32(tmp, tmp);
+        tmp = _mm_hadd_epi32(tmp, tmp);
+        y[t] = _mm_extract_epi32(tmp, 3);
+    }
+    return y;
+}
+
+int16_t* sse2(const int16_t* x, int16_t* y, size_t yLen, const int16_t* filter) {
+    // filter has to be zero-padded and reversed
+    const __m128i mFilter =_mm_loadu_si128((__m128i*)filter);
+    for (auto t = 0; t < yLen; ++t) {
         __m128i input =_mm_loadu_si128((__m128i*)&x[t]);
-        //x = _mm_and_si128(x, mask);
         __m128i tmp = _mm_madd_epi16(mFilter, input);
         tmp = _mm_hadd_epi32(tmp, tmp);
         tmp = _mm_hadd_epi32(tmp, tmp);
@@ -40,21 +49,8 @@ int16_t* sse2(const int16_t* x, int16_t* y, size_t yLen, const int16_t* filter) 
 
 int16_t* avx2(const int16_t* x, int16_t* y, size_t yLen, const int16_t* filter) {
     const __m256i mFilter = _mm256_loadu2_m128i((__m128i*)filter, (__m128i*)filter);
-    /*const __m256i filter = _mm256_set_epi16(
-            0, 0, 0, data::filter[4], data::filter[3], data::filter[2], data::filter[1], data::filter[0],
-            0, 0, 0, data::filter[4], data::filter[3], data::filter[2], data::filter[1], data::filter[0]
-    );*/
-    /*const __m256i mask = _mm256_set_epi16(
-            0, 0, 0, -1, -1, -1, -1, -1,
-            0, 0, 0, -1, -1, -1, -1, -1
-    );*/
     for (auto t = 0; t < yLen; t += 2) {
-        /*__m256i x = _mm256_set_epi16(
-                data::x[t + 1], data::x[t + 2], data::x[t + 3], data::x[t + 4], data::x[t + 5], 0, 0, 0,
-                data::x[t + 0], data::x[t + 1], data::x[t + 2], data::x[t + 3], data::x[t + 4], 0, 0, 0
-        );*/
         __m256i input = _mm256_loadu2_m128i((__m128i*)&x[t + 1], (__m128i*)&x[t]);
-        //x = _mm256_and_si256(x, mask);
         __m256i tmp = _mm256_madd_epi16(mFilter, input);
         tmp = _mm256_hadd_epi32(tmp, tmp);
         tmp = _mm256_hadd_epi32(tmp, tmp);
@@ -110,6 +106,9 @@ int main(int argc, char** argv) {
         if (firstArg == "--naive") {
             targetFunction = naive;
         }
+        else if (firstArg == "--dumbSse2") {
+            targetFunction = dumbSse2;
+        }
         else if (firstArg == "--sse2") {
             targetFunction = sse2;
         }
@@ -120,7 +119,7 @@ int main(int argc, char** argv) {
             targetFunction = smartAvx2;
         }
         else {
-            std::cerr << "usage: " << argv[0] << " --naive|--sse2|--avx2|--smartAvx2 [--validate]" << std::endl;
+            std::cerr << "usage: " << argv[0] << " --naive|--dumbSse2|--sse2|--avx2|--smartAvx2 [--validate]" << std::endl;
             std::cerr << "unknown argument: " << firstArg << std::endl;
             return -1;
         }
