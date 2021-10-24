@@ -4,7 +4,7 @@
 #include "data.hpp"
 
 namespace data {
-int16_t y[data::yLen + 3]{};
+int16_t y[data::yLen + 16]{};
 }
 
 // filter[0] * x[4 + t]
@@ -96,10 +96,17 @@ bool validate(int16_t* y, size_t yLen) {
 int main(int argc, char** argv) {
     int16_t* (*targetFunction)(const int16_t*, int16_t*, size_t, const int16_t*) = naive;
 
+    bool shouldValidate = false;
     if (argc > 1)
     {
         std::string firstArg{argv[1]};
 
+        if (argc > 2) {
+            std::string secondArg{argv[2]};
+            if (secondArg == "--validate") {
+                shouldValidate = true;
+            }
+        }
         if (firstArg == "--naive") {
             targetFunction = naive;
         }
@@ -113,7 +120,7 @@ int main(int argc, char** argv) {
             targetFunction = smartAvx2;
         }
         else {
-            std::cerr << "usage: " << argv[0] << " [--naive|--sse2|--avx2]" << std::endl;
+            std::cerr << "usage: " << argv[0] << " --naive|--sse2|--avx2|--smartAvx2 [--validate]" << std::endl;
             std::cerr << "unknown argument: " << firstArg << std::endl;
             return -1;
         }
@@ -123,7 +130,8 @@ int main(int argc, char** argv) {
     uint64_t runCount = 0;
     do
     {
-        if (not validate(targetFunction(&data::x[0], &data::y[0], data::yLen, &data::filter[0]), data::yLen)) {
+        auto* result = targetFunction(&data::x[0], &data::y[0], data::yLen, &data::filter[0]);
+        if (shouldValidate and not validate(result, data::yLen)) {
             return -1;
         }
         ++runCount;
