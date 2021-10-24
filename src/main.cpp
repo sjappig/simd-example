@@ -70,9 +70,9 @@ int16_t* smartAvx2(const int16_t* x, int16_t* y, size_t yLen, const int16_t* fil
         for (auto i = 0; i < data::filterLen; ++i) {
             input[i] = _mm256_loadu_si256((__m256i*)&x[t + i]);
             input[i] = _mm256_mullo_epi16(input[i], mFilter[i]);
-        }
-        for (auto i = 1; i < data::filterLen; ++i) {
-            input[0] = _mm256_add_epi16(input[0], input[i]);
+            if (i > 0) {
+                input[0] = _mm256_add_epi16(input[0], input[i]);
+            }
         }
         _mm256_storeu_si256((__m256i*)&y[t], input[0]);
     }
