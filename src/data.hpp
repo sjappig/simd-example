@@ -5,7 +5,7 @@ namespace data {
 constexpr size_t filterLen = 5;
 extern const int16_t filter[];
 
-constexpr size_t xLen = 19;
+constexpr size_t xLen = 1999;
 extern const int16_t x[];
 
 constexpr size_t yLen = filterLen + xLen - 1;
