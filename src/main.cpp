@@ -47,6 +47,25 @@ int16_t* sse2(const int16_t* x, int16_t* y, size_t yLen, const int16_t* filter) 
     return y;
 }
 
+int16_t* smartSse2(const int16_t* x, int16_t* y, size_t yLen, const int16_t* filter) {
+    __m128i mFilter[data::filterLen];
+    for (auto i = 0; i < data::filterLen; ++i) {
+        mFilter[i] = _mm_set1_epi16(filter[i]);
+    }
+    __m128i input[data::filterLen];
+    for (auto t = 0; t < yLen; t += 8) {
+        for (auto i = 0; i < data::filterLen; ++i) {
+            input[i] = _mm_loadu_si128((__m128i*)&x[t + i]);
+            input[i] = _mm_mullo_epi16(input[i], mFilter[i]);
+            if (i > 0) {
+                input[0] = _mm_add_epi16(input[0], input[i]);
+            }
+        }
+        _mm_storeu_si128((__m128i*)&y[t], input[0]);
+    }
+    return y;
+}
+
 int16_t* avx2(const int16_t* x, int16_t* y, size_t yLen, const int16_t* filter) {
     const __m256i mFilter = _mm256_loadu2_m128i((__m128i*)filter, (__m128i*)filter);
     for (auto t = 0; t < yLen; t += 2) {
@@ -112,6 +131,9 @@ int main(int argc, char** argv) {
         else if (firstArg == "--sse2") {
             targetFunction = sse2;
         }
+        else if (firstArg == "--smartSse2") {
+            targetFunction = smartSse2;
+        }
         else if (firstArg == "--avx2") {
             targetFunction = avx2;
         }
@@ -135,7 +157,7 @@ int main(int argc, char** argv) {
         }
         ++runCount;
         durationTicks = __rdtsc() - startTicks;
-    } while (durationTicks < 10000000000);
+    } while (durationTicks < 1000000000);
 
     std::cout << "number of runs: " << runCount << std::endl;
 
