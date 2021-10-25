@@ -47,12 +47,19 @@ int16_t* sse2(const int16_t* x, int16_t* y, size_t yLen, const int16_t* filter) 
     return y;
 }
 
+// filter[0] * x[t + 0] + filter[1] * x[t + 1] + ... + filter[4] * x[t + 4]
+// filter[0] * x[t + 1] + filter[1] * x[t + 2] + ... + filter[4] * x[t + 5]
+// filter[0] * x[t + 2] + filter[1] * x[t + 3] + ... + filter[4] * x[t + 6]
+// ...
+// filter[0] * x[t + 7] + filter[1] * x[t + 8] + ... + filter[4] * x[t + 11]
 int16_t* smartSse2(const int16_t* x, int16_t* y, size_t yLen, const int16_t* filter) {
     __m128i mFilter[data::filterLen];
+    // should revert the filter
     for (auto i = 0; i < data::filterLen; ++i) {
         mFilter[i] = _mm_set1_epi16(filter[i]);
     }
     __m128i input[data::filterLen];
+    // data has to be zero-padded
     for (auto t = 0; t < yLen; t += 8) {
         for (auto i = 0; i < data::filterLen; ++i) {
             input[i] = _mm_loadu_si128((__m128i*)&x[t + i]);
