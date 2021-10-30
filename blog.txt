@@ -1,0 +1,92 @@
+# Single instruction, multiple data
+
+Nowadays modern CPUs support so-called SIMD architecture, where single instructions are capable of processing multiple
+data elements in parellel. SIMD capability came to normal desktops with Intel's MMX and AMD's 3DNow! - I remember seeing
+advertisements of e.g. Intel Pentium MMX -processors in the end of 90's, without understanding what it meant but knowing
+that it would improve my gaming experience in PC. And that was pretty much what they were made for: boost the
+calculations needed for awesome graphics. Their usability is not limited to graphics though; most computing intensive
+tasks that can be parallelized benefits from those.
+
+The SIMD extensions are all about introducing new registers and instructions for manipulating those registers. As an
+example, MMX introduced eight 64 bit registers (MM0-MM7) and operations to manipulate those their values as they would
+be e.g. four 16 bit integers.
+
+In this text we try to boost our simple C++ program by using SIMD intrisics manually.
+
+# Problem to solve
+
+The problem here is chosen to be one that should have high chance of getting performance boost from SIMD: direct
+convolution. The convolution is a fundamental operation with many applications. See e.g. [2] if it is not familiar to
+you already. The values here are chosen pretty arbitrarily but chosen to be integers with 16 bit range for the sake of
+simplicity. The data generation was done with Octave:
+
+    octave:3> h = [-1 2 10 2 -1];
+    octave:4> x = [-999:999];
+    octave:5> y = conv(h,x);
+
+Our target with C++ is now to calculate y when h and x are given.
+
+# Naive C++ implementation
+
+To get the first benchmark (and to build all the necessary validations and measuring) we start with the most
+straight-forward implementation of convolution one can have:
+
+int16_t* naive(const int16_t* x, int16_t* y, size_t yLen) {
+    for (auto t = 0; t < yLen; ++t) {
+        y[t] = 0;
+        for (auto i = 0; i < data::hLen; ++i) {
+            y[t] += data::h[i] * x[(data::hLen - 1) - i + t];
+        }
+    }
+    return y;
+}
+
+The data is zero-padded where needed to prevent prevent buffer overflows. The mechanisms around the actual convolution
+implementations can be found in the source code, and include choosing the implementation based on a command line flag,
+optional validation (also based on a command line flag) of the output and measuring needed cycles per run.
+
+# First SIMD implementation
+
+We start our SIMD experiments with 128 bit register introduced in SSE. Instructions used here require capability up to
+SSE4.1 (_mm_extract_epi_32). As this is our first version, we start by just getting rid of the inner loop of our naive
+implementation.
+
+Using 128 bit registers means that we have enough space for eigth 16 bit values; however, since our filter has only
+five values, we waste three elements in each round with this implementation. If you wonder the argument order in the
+_mm_set_epi16, the explanation is that it takes the least significant word as the last one. Hence we get one register
+with first 80 bits filled with filter weights, and other register with 80 bits filled with the reversed input elements.
+
+The implementation uses then the multiply-add to multiply the filter weights with input and do the first pair-wise
+additions. Note how the outcome of the multiply-add for two 16 bit integers is one 32 bit integer. Unfortunately the
+multiply-add does not do the whole summation, so we have to do two more pair-wise additions (_mm_hadd_epi32), before the
+sum over the whole range can be read from the first 32 bits of the register.
+
+int16_t* dumbSse(const int16_t* x, int16_t* y, size_t yLen) {
+    const __m128i mFilter = _mm_set_epi16(0, 0, 0, data::h[4], data::h[3], data::h[2], data::h[1], data::h[0]);
+    for (auto t = 0; t < yLen; ++t) {
+        __m128i input = _mm_set_epi16(0, 0, 0, x[t], x[t + 1], x[t + 2], x[t + 3], x[t + 4]);
+        __m128i tmp = _mm_madd_epi16(mFilter, input);
+        tmp = _mm_hadd_epi32(tmp, tmp);
+        tmp = _mm_hadd_epi32(tmp, tmp);
+        y[t] = _mm_extract_epi32(tmp, 0);
+    }
+    return y;
+}
+
+# First results
+
+jaripekkary@jaripekkary-Latitude-E7440:~/projects/simd-example$ make
+clang++ -march=native -g -O0   -c -o src/data.o src/data.cpp
+clang++ -march=native -g -O0   -c -o src/main.o src/main.cpp
+clang++  src/data.o src/main.o   -o simd-example
+jaripekkary@jaripekkary-Latitude-E7440:~/projects/simd-example$ ./simd-example --naive --validate
+Cycles per convolution (averaged over 12078 runs): 82797.4 (incl. validation)
+jaripekkary@jaripekkary-Latitude-E7440:~/projects/simd-example$ ./simd-example --dumbSse --validate
+Cycles per convolution (averaged over 12113 runs): 82558.8 (incl. validation)
+jaripekkary@jaripekkary-Latitude-E7440:~/projects/simd-example$ ./simd-example --naive
+Cycles per convolution (averaged over 13821 runs): 72354.4
+jaripekkary@jaripekkary-Latitude-E7440:~/projects/simd-example$ ./simd-example --dumbSse
+Cycles per convolution (averaged over 13497 runs): 74093.6
+
+# References
+[2] https://betterexplained.com/articles/intuitive-convolution/

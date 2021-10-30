@@ -1,5 +1,6 @@
+OPTIMIZATION_LEVEL = 0
 CXX = clang++
-CXXFLAGS = -march=native -g -O3
+CXXFLAGS = -march=native -g -O${OPTIMIZATION_LEVEL}
 
 .PHONY: clean
 

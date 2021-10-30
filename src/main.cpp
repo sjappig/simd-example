@@ -22,7 +22,7 @@ int16_t* naive(const int16_t* x, int16_t* y, size_t yLen) {
     return y;
 }
 
-int16_t* dumbSse2(const int16_t* x, int16_t* y, size_t yLen) {
+int16_t* dumbSse(const int16_t* x, int16_t* y, size_t yLen) {
     const __m128i mFilter = _mm_set_epi16(0, 0, 0, data::h[4], data::h[3], data::h[2], data::h[1], data::h[0]);
     for (auto t = 0; t < yLen; ++t) {
         __m128i input = _mm_set_epi16(0, 0, 0, x[t], x[t + 1], x[t + 2], x[t + 3], x[t + 4]);
@@ -34,7 +34,7 @@ int16_t* dumbSse2(const int16_t* x, int16_t* y, size_t yLen) {
     return y;
 }
 
-int16_t* sse2(const int16_t* x, int16_t* y, size_t yLen) {
+int16_t* sse(const int16_t* x, int16_t* y, size_t yLen) {
     // filter has to be zero-padded and reversed
     const __m128i mFilter =_mm_loadu_si128((__m128i*)&data::h[0]);
     for (auto t = 0; t < yLen; ++t) {
@@ -52,7 +52,7 @@ int16_t* sse2(const int16_t* x, int16_t* y, size_t yLen) {
 // filter[0] * x[t + 2] + filter[1] * x[t + 3] + ... + filter[4] * x[t + 6]
 // ...
 // filter[0] * x[t + 7] + filter[1] * x[t + 8] + ... + filter[4] * x[t + 11]
-int16_t* smartSse2(const int16_t* x, int16_t* y, size_t yLen) {
+int16_t* smartSse(const int16_t* x, int16_t* y, size_t yLen) {
     __m128i mFilter[data::hLen];
     // should revert the filter
     for (auto i = 0; i < data::hLen; ++i) {
@@ -69,19 +69,6 @@ int16_t* smartSse2(const int16_t* x, int16_t* y, size_t yLen) {
             }
         }
         _mm_storeu_si128((__m128i*)&y[t], input[0]);
-    }
-    return y;
-}
-
-int16_t* avx2(const int16_t* x, int16_t* y, size_t yLen) {
-    const __m256i mFilter = _mm256_loadu2_m128i((__m128i*)&data::h[0], (__m128i*)&data::h[0]);
-    for (auto t = 0; t < yLen; t += 2) {
-        __m256i input = _mm256_loadu2_m128i((__m128i*)&x[t + 1], (__m128i*)&x[t]);
-        __m256i tmp = _mm256_madd_epi16(mFilter, input);
-        tmp = _mm256_hadd_epi32(tmp, tmp);
-        tmp = _mm256_hadd_epi32(tmp, tmp);
-        y[t + 0] = _mm256_extract_epi32(tmp, 3);
-        y[t + 1] = _mm256_extract_epi32(tmp, 7);
     }
     return y;
 }
@@ -116,45 +103,46 @@ bool validate(int16_t* y, size_t yLen) {
 }
 
 int main(int argc, char** argv) {
-    int16_t* (*targetFunction)(const int16_t*, int16_t*, size_t) = naive;
+    int16_t* (*targetFunction)(const int16_t*, int16_t*, size_t) = nullptr;
 
     bool shouldValidate = false;
     if (argc > 1)
     {
         std::string firstArg{argv[1]};
 
-        if (argc > 2) {
-            std::string secondArg{argv[2]};
-            if (secondArg == "--validate") {
-                shouldValidate = true;
-            }
-        }
         if (firstArg == "--naive") {
             targetFunction = naive;
         }
-        else if (firstArg == "--dumbSse2") {
-            targetFunction = dumbSse2;
+        else if (firstArg == "--dumbSse") {
+            targetFunction = dumbSse;
         }
-        else if (firstArg == "--sse2") {
-            targetFunction = sse2;
+        else if (firstArg == "--sse") {
+            targetFunction = sse;
         }
-        else if (firstArg == "--smartSse2") {
-            targetFunction = smartSse2;
-        }
-        else if (firstArg == "--avx2") {
-            targetFunction = avx2;
+        else if (firstArg == "--smartSse") {
+            targetFunction = smartSse;
         }
         else if (firstArg == "--smartAvx2") {
             targetFunction = smartAvx2;
         }
-        else {
-            std::cerr << "usage: " << argv[0] << " --naive|--dumbSse2|--sse2|--avx2|--smartAvx2 [--validate]" << std::endl;
-            std::cerr << "unknown argument: " << firstArg << std::endl;
-            return -1;
+
+        if (argc > 2) {
+            if (std::string{argv[2]} == "--validate") {
+                shouldValidate = true;
+            }
+            else {
+                targetFunction = nullptr;
+            }
         }
     }
+
+    if (not targetFunction) {
+        std::cerr << "usage: " << argv[0] << " --naive|--dumbSse|--sse|--smartSse|--smartAvx2 [--validate]" << std::endl;
+        return -1;
+    }
+
     uint64_t startTicks = __rdtsc();
-    uint64_t durationTicks = 0;
+    uint64_t durationCycles = 0;
     uint64_t runCount = 0;
     do
     {
@@ -163,10 +151,14 @@ int main(int argc, char** argv) {
             return -1;
         }
         ++runCount;
-        durationTicks = __rdtsc() - startTicks;
-    } while (durationTicks < 1000000000);
+        durationCycles = __rdtsc() - startTicks;
+    } while (durationCycles < 1000000000);
 
-    std::cout << "number of runs: " << runCount << std::endl;
+    std::cout << "Cycles per convolution (averaged over " << runCount << " runs): " << durationCycles/(double)runCount;
+    if (shouldValidate) {
+        std::cout << " (incl. validation)";
+    }
+    std::cout << std::endl;
 
     return 0;
 }
