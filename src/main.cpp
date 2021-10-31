@@ -12,7 +12,7 @@ int16_t y[data::yLen + 16]{};
 // h[2] * x[2 + t] +
 // h[3] * x[1 + t] +
 // h[4] * x[0 + t] = y[t]
-int16_t* naive(const int16_t* x, int16_t* y, size_t yLen) {
+int16_t* naive(const int16_t* __restrict__ x, int16_t* __restrict__ y, size_t yLen) {
     for (auto t = 0; t < yLen; ++t) {
         y[t] = 0;
         for (auto i = 0; i < data::hLen; ++i) {
@@ -35,8 +35,9 @@ int16_t* dumbSse(const int16_t* x, int16_t* y, size_t yLen) {
 }
 
 int16_t* sse(const int16_t* x, int16_t* y, size_t yLen) {
-    // filter has to be zero-padded and reversed
-    const __m128i mFilter =_mm_loadu_si128((__m128i*)&data::h[0]);
+    // filter has to be zero-padded and should be reversed: however, our filter is symmetrical,
+    // so the reverse is not really needed
+    const __m128i mFilter = _mm_loadu_si128((__m128i*)&data::h[0]);
     for (auto t = 0; t < yLen; ++t) {
         __m128i input =_mm_loadu_si128((__m128i*)&x[t]);
         __m128i tmp = _mm_madd_epi16(mFilter, input);
@@ -73,7 +74,7 @@ int16_t* smartSse(const int16_t* x, int16_t* y, size_t yLen) {
     return y;
 }
 
-int16_t* smartAvx2(const int16_t* x, int16_t* y, size_t yLen) {
+int16_t* smartAvx2(const int16_t* __restrict__ x, int16_t* __restrict__ y, size_t yLen) {
     __m256i mFilter[data::hLen];
     for (auto i = 0; i < data::hLen; ++i) {
         mFilter[i] = _mm256_set1_epi16(data::h[i]);
