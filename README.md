@@ -21,7 +21,7 @@ you already. The values here are chosen pretty arbitrarily but chosen to be inte
 simplicity. The data generation was done with Octave:
 
     octave:3> h = [-1 2 10 2 -1];
-    octave:4> x = [-999:999];
+    octave:4>
     octave:5> y = conv(h,x);
 
 Our target with C++ is now to calculate y when h and x are given.
@@ -187,10 +187,10 @@ And now we are actually beating the optimized naive-version:
     jaripekkary@jaripekkary-Latitude-E7440:~/projects/simd-example$ ./simd-example --smartAvx2
     Cycles per convolution (averaged over 1743057 runs): 573.705
 
-However, instead of being happy of this result, it does not make sense; we should have similar results as the optimized
-version, as we use the same approach with same level of parallelization. It turns out that the compiler does not know if
-the input and the output arrays will overlap, and it has to therefore produce assembly that is writing and reading from
-those arrays after each calculation step.
+However, the results do not make sense; we should have similar results as the optimized version, as we use the same
+approach with same level of parallelization. It turns out that the compiler does not know if the input and the output
+arrays will overlap, and it has to therefore produce assembly that is writing and reading from those arrays after each
+calculation step.
 
         #DEBUG_VALUE: naive:y <- $rax
         #DEBUG_VALUE: t <- 0
