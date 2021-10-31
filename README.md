@@ -1,6 +1,6 @@
 # Optimizing C++ with x86 SIMD
 
-Nowadays modern CPUs support so-called SIMD (single instruction, multiple data) architecture, where single instructions
+Nowadays modern CPUs support so-called SIMD (single instruction, multiple data [1]) architecture, where single instructions
 are capable of processing multiple data elements in parellel. SIMD capability came to normal desktops with Intel's MMX
 and AMD's 3DNow! - I remember seeing advertisements of e.g. Intel Pentium MMX -processors in the end of 90's, without
 understanding what it meant but knowing that it would improve my gaming experience in PC. And that was pretty much what
@@ -48,8 +48,8 @@ implementation has potential integer overflow in it, which we however ignore her
 
 # First SIMD implementation
 
-We start our SIMD experiments with 128 bit register introduced in SSE. Instructions used here require capability up to
-SSE4.1 (_mm_extract_epi_32). As this is our first version, we start by just getting rid of the inner loop of our naive
+We start our SIMD experiments with 128 bit register introduced in SSE [3]. Instructions used here require capability up to
+SSE4.1 (_mm_extract_epi_32) [4]. As this is our first version, we start by just getting rid of the inner loop of our naive
 implementation.
 
 Using 128 bit registers means that we have enough space for eigth 16 bit values; however, since our filter has only
@@ -235,4 +235,11 @@ the compiler would fail with some other, more complex cases; however, one should
 readable "naive"-version, and see if the compiler magic would be enough.
 
 # References
+
+[1] https://en.wikipedia.org/wiki/SIMD
+
 [2] https://betterexplained.com/articles/intuitive-convolution/
+
+[3] https://en.wikipedia.org/wiki/Streaming_SIMD_Extensions
+
+[4] https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html
