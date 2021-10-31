@@ -74,7 +74,7 @@ sum over the whole range can be read from the first 32 bits of the register.
         return y;
     }
 
-# Benchmarking the first SIMD version
+# Benchmarking and developing the SIMD versions
 
 We start with compiler optimizations turned off and enabling all intruction subsets supported by the local machine
 (-march=native).
